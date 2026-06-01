@@ -1,0 +1,145 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url     = env("DATABASE_URL")
+}
+
+model User {
+  id        String @id @default(cuid())
+
+  name      String
+  email     String @unique
+  password  String?
+  isVerified Boolean @default(false)
+
+  otpCode    String?
+  otpExpires DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+model Listing {
+  id String @id @default(cuid())
+  sellerId String
+  title String
+  price Float
+  currency String
+
+  category String
+  location String
+  country String
+
+  image String
+  description String
+
+  condition String
+
+  createdAt DateTime @default(now())
+
+  @@index([sellerId])
+  @@index([category])
+  @@index([country])
+  @@index([price])
+}
+
+model Order {
+  id                   String      @id @default(cuid())
+
+  buyerId              String
+  sellerId             String
+
+  listingId            String
+
+  listingTitle         String
+  listingImage         String
+
+  sellerName           String
+
+  amount               Float
+  currency             String
+
+  buyerProtectionFee   Float @default(10)
+
+  status               OrderStatus @default(pending_payment)
+
+  createdAt            DateTime @default(now())
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([listingId])
+  @@index([status])
+}
+
+enum OrderStatus {
+  pending_payment
+  funds_held
+  shipped
+  delivered
+  released
+  disputed
+  refunded
+  cancelled
+}
+
+model OrderEvent {
+  id        String   @id @default(cuid())
+
+  orderId   String
+
+  status    String
+  note      String
+
+  at        DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model OrderDispute {
+  id String @id @default(cuid())
+
+  orderId String
+
+  reason String
+  detail String
+  openedAt DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model ChatThread {
+  id String @id @default(cuid())
+
+  buyerId String
+  sellerId String
+
+  listingId String
+  listingTitle String
+  createdAt DateTime @default(now())
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([listingId])
+}
+
+model Message {
+  id String @id @default(cuid())
+
+  threadId String
+  senderId String
+  text String
+  createdAt DateTime @default(now())
+
+  @@index([threadId])
+  @@index([senderId])
+}
