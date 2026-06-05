@@ -1,145 +1,604 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+ // This is your Prisma schema file,
+  // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
+  generator client {
+    provider      = "prisma-client-js"
+    binaryTargets = ["native"]
+  }
 
-generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
-}
+  datasource db {
+    provider = "mysql"
+    url      = env("DATABASE_URL")
+  }
 
-datasource db {
-  provider = "mysql"
-  url     = env("DATABASE_URL")
-}
+// ==================== USER & AUTH ====================
 
 model User {
-  id        String @id @default(cuid())
+  id                BigInt         @id @default(autoincrement())
+  name              String
+  email             String         @unique
+  phone             String?
+  password          String?
+  avatar            String?
+  country           String?
+  language          String         @default("en")
+  isVerified        Boolean        @default(false)
+  otpCode           String?
+  otpExpires        DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
+  listings          Listing[]
+  orders            Order[]        @relation("BuyerOrders")
+  sellerOrders      Order[]        @relation("SellerOrders")
+  favoriteListings  Favorite[]
+  cart              Cart?
+  messages          Message[]
+  buyerChatThreads  ChatThread[]   @relation("BuyerChatThreads")
+  sellerChatThreads ChatThread[]   @relation("SellerChatThreads")
+  notifications     Notification[]
+  reviews           Review[]       @relation("ReviewerReviews")
+  sellerReviews     Review[]       @relation("SellerReviews")
+  disputes          Dispute[]      @relation("BuyerDisputes")
+  sellerDisputes    Dispute[]      @relation("SellerDisputes")
+  refreshTokens     RefreshToken[]
+  uploads           Upload[]
+  auditLogs         AuditLog[]     @relation("ActorAuditLogs")
+
+  @@index([email, phone])
+  @@map("users")
+
+}
+
+model Admin {
+  id        BigInt    @id @default(autoincrement())
+  email     String    @unique
+  password  String
   name      String
-  email     String @unique
-  password  String?
-  isVerified Boolean @default(false)
-
-  otpCode    String?
-  otpExpires DateTime?
-
-  createdAt DateTime @default(now())
+  role      AdminRole @default(moderator)
+  avatar    String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([email])
+  @@index([role])
+
+  @@map("admins")
+
 }
+
+enum AdminRole {
+  super_admin
+  moderator
+  support
+}
+
+// ==================== CATEGORIES & FIELDS ====================
+
+model Category {
+  id          BigInt          @id @default(autoincrement())
+  name        String
+  slug        String          @unique
+  description String?
+  icon        String?
+  image       String?
+  order       Int             @default(0)
+  parentId    BigInt?
+  parent      Category?       @relation("CategoryParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[]      @relation("CategoryParent")
+  fields      CategoryField[]
+  listings    Listing[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([slug])
+  @@index([parentId])
+
+  @@map("categories")
+}
+
+model CategoryField {
+  id          BigInt                @id @default(autoincrement())
+  categoryId  BigInt
+  category    Category              @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  label       String
+  fieldKey    String
+  fieldType   FieldType
+  description String?
+  order       Int                   @default(0)
+  required    Boolean               @default(false)
+  filterable  Boolean               @default(false)
+  searchable  Boolean               @default(false)
+  minValue    Int?
+  maxValue    Int?
+  step        Int?
+  minLength   Int?
+  maxLength   Int?
+  options     CategoryFieldOption[]
+  attributes  ListingAttribute[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@unique([categoryId, fieldKey])
+  @@index([categoryId])
+
+    @@map("category_fields")
+
+}
+
+enum FieldType {
+  text
+  textarea
+  number
+  number_range
+  select
+  multiselect
+  checkbox
+  radio
+  date
+  image
+  url
+}
+
+model CategoryFieldOption {
+  id        BigInt        @id @default(autoincrement())
+  fieldId   BigInt
+  field     CategoryField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  label     String
+  value     String
+  order     Int           @default(0)
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
+
+  @@index([fieldId])
+
+    @@map("category_field_options")
+
+}
+
+// ==================== LISTINGS ====================
 
 model Listing {
-  id String @id @default(cuid())
-  sellerId String
-  title String
-  price Float
-  currency String
-
-  category String
-  location String
-  country String
-
-  image String
-  description String
-
-  condition String
-
-  createdAt DateTime @default(now())
+  id              BigInt             @id @default(autoincrement())
+  sellerId        BigInt
+  seller          User               @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  categoryId      BigInt
+  category        Category           @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  title           String
+  description     String?
+  price           Float
+  currency        String
+  location        String
+  country         String
+  image           String
+  images          Json               @default("[]")
+  condition       String?
+  status          ListingStatus      @default(active)
+  approvalStatus  ApprovalStatus     @default(pending)
+  approvedAt      DateTime?
+  rejectionReason String?
+  viewCount       Int                @default(0)
+  attributes      ListingAttribute[]
+  favorites       Favorite[]
+  orders          Order[]
+  chatThreads     ChatThread[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   @@index([sellerId])
-  @@index([category])
+  @@index([categoryId, price, createdAt])
   @@index([country])
-  @@index([price])
+  @@index([status])
+  @@index([approvalStatus])
+
+    @@map("listings")
+
 }
 
+enum ListingStatus {
+  active
+  inactive
+  sold
+  archived
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+model ListingAttribute {
+  id        BigInt        @id @default(autoincrement())
+  listingId BigInt
+  listing   Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  fieldId   BigInt
+  field     CategoryField @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+  value     String
+  valueJson Json?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([listingId, fieldId])
+  @@index([listingId])
+  @@index([fieldId, value])
+
+    @@map("listing_attributes")
+
+}
+
+// ==================== FAVORITES ====================
+
+model Favorite {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId BigInt
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, listingId])
+  @@index([userId])
+  @@index([listingId])
+
+    @@map("favorites")
+
+}
+
+// ==================== CART ====================
+
+model Cart {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     Json     @default("[]")
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+
+    @@map("carts")
+
+}
+
+// ==================== ORDERS & ESCROW ====================
+
 model Order {
-  id                   String      @id @default(cuid())
-
-  buyerId              String
-  sellerId             String
-
-  listingId            String
-
-  listingTitle         String
-  listingImage         String
-
-  sellerName           String
-
-  amount               Float
-  currency             String
-
-  buyerProtectionFee   Float @default(10)
-
-  status               OrderStatus @default(pending_payment)
-
-  createdAt            DateTime @default(now())
+  id                 BigInt       @id @default(autoincrement())
+  buyerId            BigInt
+  buyer              User         @relation("BuyerOrders", fields: [buyerId], references: [id], onDelete: Restrict)
+  sellerId           BigInt
+  seller             User         @relation("SellerOrders", fields: [sellerId], references: [id], onDelete: Restrict)
+  listingId          BigInt
+  listing            Listing      @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  listingTitle       String
+  listingImage       String
+  amount             Float
+  currency           String
+  buyerProtectionFee Float        @default(10)
+  status             OrderStatus  @default(pending_payment)
+  escrowStatus       EscrowStatus @default(created)
+  shippingAddress    Json?
+  trackingNumber     String?
+  items              OrderItem[]
+  events             OrderEvent[]
+  dispute            Dispute?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
   @@index([buyerId])
   @@index([sellerId])
   @@index([listingId])
   @@index([status])
+  @@index([escrowStatus])
+  @@index([buyerId, status])
+  @@index([sellerId, status])
+
+    @@map("orders")
+
 }
 
 enum OrderStatus {
   pending_payment
-  funds_held
+  confirmed
   shipped
   delivered
-  released
-  disputed
-  refunded
+  completed
   cancelled
 }
 
-model OrderEvent {
-  id        String   @id @default(cuid())
-
-  orderId   String
-
-  status    String
-  note      String
-
-  at        DateTime @default(now())
-
-  @@index([orderId])
+enum EscrowStatus {
+  created
+  funds_held
+  in_review
+  released
+  refunded
+  disputed
 }
 
-model OrderDispute {
-  id String @id @default(cuid())
-
-  orderId String
-
-  reason String
-  detail String
-  openedAt DateTime @default(now())
-
-  @@index([orderId])
-}
-
-model ChatThread {
-  id String @id @default(cuid())
-
-  buyerId String
-  sellerId String
-
-  listingId String
-  listingTitle String
+model OrderItem {
+  id        BigInt   @id @default(autoincrement())
+  orderId   BigInt
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  listingId BigInt
+  title     String
+  quantity  Int
+  price     Float
+  currency  String
   createdAt DateTime @default(now())
 
+  @@index([orderId])
+
+    @@map("order_items")
+
+}
+
+model OrderEvent {
+  id           BigInt        @id @default(autoincrement())
+  orderId      BigInt
+  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status       OrderStatus
+  escrowStatus EscrowStatus?
+  note         String?
+  createdAt    DateTime      @default(now())
+
+  @@index([orderId])
+
+    @@map("order_events")
+
+}
+
+// ==================== DISPUTES ====================
+
+model Dispute {
+  id         BigInt        @id @default(autoincrement())
+  orderId    BigInt        @unique
+  order      Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  buyerId    BigInt
+  buyer      User          @relation("BuyerDisputes", fields: [buyerId], references: [id], onDelete: Restrict)
+  sellerId   BigInt
+  seller     User          @relation("SellerDisputes", fields: [sellerId], references: [id], onDelete: Restrict)
+  reason     String
+  detail     String?
+  evidence   Json?
+  status     DisputeStatus @default(open)
+  resolution String?
+  resolvedAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([orderId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+
+    @@map("disputes")
+
+}
+
+enum DisputeStatus {
+  open
+  under_review
+  resolved
+  closed
+}
+
+// ==================== REVIEWS & RATINGS ====================
+
+model Review {
+  id         BigInt   @id @default(autoincrement())
+  orderId    BigInt
+  reviewerId BigInt
+  reviewer   User     @relation("ReviewerReviews", fields: [reviewerId], references: [id], onDelete: Cascade)
+  sellerId   BigInt?
+  seller     User?    @relation("SellerReviews", fields: [sellerId], references: [id], onDelete: SetNull)
+  rating     Int
+  title      String?
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([orderId, reviewerId])
+  @@index([reviewerId])
+  @@index([sellerId])
+
+    @@map("reviews")
+
+}
+
+// ==================== CHAT & MESSAGING ====================
+
+model ChatThread {
+  id        BigInt    @id @default(autoincrement())
+  buyerId   BigInt
+  buyer     User      @relation("BuyerChatThreads", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId  BigInt
+  seller    User?     @relation("SellerChatThreads", fields: [sellerId], references: [id], onDelete: Cascade)
+  listingId BigInt
+  listing   Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  isRead    Boolean   @default(false)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([buyerId, sellerId, listingId])
   @@index([buyerId])
   @@index([sellerId])
   @@index([listingId])
+
+    @@map("chat_threads")
+
 }
 
 model Message {
-  id String @id @default(cuid())
-
-  threadId String
-  senderId String
-  text String
-  createdAt DateTime @default(now())
+  id          BigInt     @id @default(autoincrement())
+  threadId    BigInt
+  thread      ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderId    BigInt
+  sender      User       @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  text        String
+  attachments Json?
+  isRead      Boolean    @default(false)
+  readAt      DateTime?
+  createdAt   DateTime   @default(now())
 
   @@index([threadId])
   @@index([senderId])
+  @@index([createdAt])
+
+    @@map("messages")
+
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id        BigInt           @id @default(autoincrement())
+  userId    BigInt
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+
+    @@map("notifications")
+
+}
+
+enum NotificationType {
+  new_message
+  order_update
+  listing_approved
+  listing_rejected
+  dispute_update
+  review_received
+  payment_received
+}
+
+// ==================== CMS & UPLOADS ====================
+
+model CMSPage {
+  id              BigInt   @id @default(autoincrement())
+  slug            String   @unique
+  title           String
+  content         String   @db.LongText
+  metaTitle       String?
+  metaDescription String?
+  isPublished     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([slug])
+  @@index([isPublished])
+
+    @@map("cms_pages")
+
+}
+
+model Upload {
+  id          BigInt   @id @default(autoincrement())
+  userId      BigInt?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fileName    String
+  fileSize    BigInt
+  mimeType    String
+  path        String
+  url         String
+  storageType String   @default("local")
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+
+    @@map("uploads")
+
+}
+
+// ==================== AUTH TOKENS & AUDIT ====================
+
+model RefreshToken {
+  id        BigInt   @id @default(autoincrement())
+  token     String   @unique
+  userId    BigInt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+
+    @@map("refresh_tokens")
+
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  actorId    BigInt?
+  actor      User?    @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  entity     String
+  entityId   String
+  beforeData Json?
+  afterData  Json?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entity])
+
+    @@map("audit_logs")
+
+}
+
+// ==================== LOCALIZATION ====================
+
+model Country {
+  id        BigInt   @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  currency  String
+  flag      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([code])
+
+    @@map("countries")
+
+}
+
+model Language {
+  id        BigInt   @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([code])
+
+    @@map("languages")
+
+}
+
+model Currency {
+  id        BigInt   @id @default(autoincrement())
+  code      String   @unique
+  symbol    String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([code])
+
+    @@map("currencies")
+
 }

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { toPrismaId } from 'src/common/utils/prisma-helpers';
 
 import { CreateListingDto } from './dto/create-listing.dto';
 import { UpdateListingDto } from './dto/update-listing.dto';
@@ -20,12 +21,25 @@ export class ListingsService {
     userId: string,
     dto: CreateListingDto,
   ) {
-    return this.prisma.listing.create({
-      data: {
-        sellerId: userId,
-        ...dto,
-      },
-    });
+    const data: any = {
+      sellerId: toPrismaId(userId)!,
+      title: dto.title,
+      price: dto.price,
+      currency: dto.currency,
+      location: dto.location,
+      country: dto.country,
+      description: dto.description,
+      condition: dto.condition,
+      image: dto.image || null,
+    };
+
+    if (dto.category) {
+      data.category = {
+        connect: { id: toPrismaId(dto.category)! },
+      };
+    }
+
+    return this.prisma.listing.create({ data });
   }
 
   async findAll(query: QueryListingDto) {
@@ -54,7 +68,7 @@ export class ListingsService {
 
     // category
     if (query.category) {
-      where.category = query.category;
+      where.categoryId = toPrismaId(query.category);
     }
 
     // country
@@ -121,10 +135,10 @@ export class ListingsService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string | number | bigint) {
     const listing =
       await this.prisma.listing.findUnique({
-        where: { id },
+        where: { id: toPrismaId(id) },
       });
 
     if (!listing) {
@@ -137,13 +151,13 @@ export class ListingsService {
   }
 
   async update(
-    id: string,
-    userId: string,
+    id: string | number | bigint,
+    userId: string | number | bigint,
     dto: UpdateListingDto,
   ) {
     const listing =
       await this.prisma.listing.findUnique({
-        where: { id },
+        where: { id: toPrismaId(id) },
       });
 
     if (!listing) {
@@ -152,22 +166,29 @@ export class ListingsService {
       );
     }
 
-    if (listing.sellerId !== userId) {
+    if (listing.sellerId !== toPrismaId(userId)) {
       throw new ForbiddenException(
         'Access denied',
       );
     }
 
+    const data: any = { ...dto };
+    if ('category' in dto && dto.category) {
+      data.category = {
+        connect: { id: toPrismaId(dto.category)! },
+      };
+    }
+
     return this.prisma.listing.update({
-      where: { id },
-      data: dto,
+      where: { id: toPrismaId(id) },
+      data,
     });
   }
 
-  async remove(id: string, userId: string) {
+  async remove(id: string | number | bigint, userId: string | number | bigint) {
     const listing =
       await this.prisma.listing.findUnique({
-        where: { id },
+        where: { id: toPrismaId(id) },
       });
 
     if (!listing) {
@@ -176,14 +197,14 @@ export class ListingsService {
       );
     }
 
-    if (listing.sellerId !== userId) {
+    if (listing.sellerId !== toPrismaId(userId)) {
       throw new ForbiddenException(
         'Access denied',
       );
     }
 
     await this.prisma.listing.delete({
-      where: { id },
+      where: { id: toPrismaId(id) },
     });
 
     return {};

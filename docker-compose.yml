@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: marketplace_api
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      mysql:
+        condition: service_healthy # Wait until MySQL is fully initialized
+      redis:
+        condition: service_started
+    environment:
+      # Map your local connection string to the variable your code expects
+      DATABASE_URL: mysql://root:root@mysql:3306/marketplace
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    command: npm run start:prod
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  mysql:
+    image: mysql:8
+    container_name: marketplace_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: marketplace
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    # Added healthcheck so NestJS doesn't crash on start trying to connect
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -proot || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: marketplace_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  adminer:
+    image: adminer
+    container_name: marketplace_adminer
+    restart: always
+    ports:
+      - "8080:8080"
+
+volumes:
+  mysql_data:

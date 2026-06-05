@@ -41,7 +41,7 @@ export class AuthService {
         email: data.email,
         password: hashedPassword,
         otpCode: otp,
-        otpExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        otpExpires: new Date(Date.now() + 5 * 60 * 1000),
       },
     });
 
@@ -72,7 +72,7 @@ export class AuthService {
   const matched =
     await bcrypt.compare(
       data.password,
-      user.password!,
+      user.password ?? '',
     );
 
   if (!matched) {

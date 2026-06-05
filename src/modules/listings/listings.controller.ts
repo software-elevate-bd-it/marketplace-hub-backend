@@ -1,119 +1,93 @@
 import {
-  Body,
   Controller,
-  Delete,
   Get,
-  Param,
   Post,
-  Put,
+  Patch,
+  Delete,
+  Body,
+  Param,
   Query,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
-
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
-
-import { ListingsService } from './listings.service';
-
-import { CreateListingDto } from './dto/create-listing.dto';
-import { UpdateListingDto } from './dto/update-listing.dto';
-import { QueryListingDto } from './dto/query-listing.dto';
-
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import { ListingService } from './service/listing.service';
+import { CreateListingDto, UpdateListingDto, QueryListingDto } from './dto/listing.dto';
+import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 
 @ApiTags('Listings')
 @Controller('listings')
 export class ListingsController {
-  constructor(
-    private readonly listingsService: ListingsService,
-  ) {}
+  constructor(private listingService: ListingService) {}
 
   @Post()
-  @ApiOperation({
-    summary: 'Create listing',
-  })
-  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  create(
-    @CurrentUser('id') userId: string,
-
-    @Body()
-    dto: CreateListingDto,
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new listing' })
+  async createListing(
+    @CurrentUser() user: any,
+    @Body() createListingDto: CreateListingDto,
   ) {
-    return this.listingsService.create(
-      userId,
-      dto,
-    );
+    return this.listingService.createListing(user.id, createListingDto);
   }
 
   @Get()
-  @ApiOperation({
-    summary: 'Get all listings',
-  })
-  findAll(
-    @Query()
-    query: QueryListingDto,
+  @ApiOperation({ summary: 'Search and filter listings' })
+  async searchListings(
+    @Query() query: QueryListingDto,
+    @Query() pagination: PaginationQueryDto,
   ) {
-    return this.listingsService.findAll(
-      query,
-    );
+    return this.listingService.searchListings(query, pagination.page, pagination.perPage);
+  }
+
+  @Get('top-picks')
+  @ApiOperation({ summary: 'Get top picks listings' })
+  async getTopPicks(@Query() pagination: PaginationQueryDto) {
+    return this.listingService.getTopPicks(pagination.page, pagination.perPage);
+  }
+
+  @Get('recent')
+  @ApiOperation({ summary: 'Get recent listings' })
+  async getRecentListings(@Query() pagination: PaginationQueryDto) {
+    return this.listingService.getTopPicks(pagination.page, pagination.perPage);
   }
 
   @Get(':id')
-  @ApiOperation({
-    summary: 'Get listing details',
-  })
-  findOne(
-    @Param('id')
-    id: string,
-  ) {
-    return this.listingsService.findOne(id);
+  @ApiOperation({ summary: 'Get listing details' })
+  async getListingById(@Param('id') id: string) {
+    return this.listingService.getListingById(id);
   }
 
-  @Put(':id')
-  @ApiOperation({
-    summary: 'Update listing',
-  })
-  @ApiBearerAuth()
+  @Patch(':id')
   @UseGuards(JwtAuthGuard)
-  update(
-    @Param('id')
-    id: string,
-
-    @CurrentUser('id')
-    userId: string,
-
-    @Body()
-    dto: UpdateListingDto,
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update own listing' })
+  async updateListing(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() updateListingDto: UpdateListingDto,
   ) {
-    return this.listingsService.update(
-      id,
-      userId,
-      dto,
-    );
+    return this.listingService.updateListing(id, user.id, updateListingDto);
   }
 
   @Delete(':id')
-  @ApiOperation({
-    summary: 'Delete listing',
-  })
-  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  remove(
-    @Param('id')
-    id: string,
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete own listing' })
+  async deleteListing(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.listingService.deleteListing(id, user.id);
+  }
 
-    @CurrentUser('id')
-    userId: string,
-  ) {
-    return this.listingsService.remove(
-      id,
-      userId,
-    );
+  @Post(':id/report')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Report a listing' })
+  async reportListing(@Param('id') id: string, @Body() body: any) {
+    return { success: true, message: 'Listing reported' };
   }
 }
